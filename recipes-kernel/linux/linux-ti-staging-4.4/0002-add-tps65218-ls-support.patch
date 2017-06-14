@@ -1,0 +1,262 @@
+Index: ti-linux-kernel/drivers/regulator/tps65218-regulator.c
+===================================================================
+--- ti-linux-kernel.orig/drivers/regulator/tps65218-regulator.c
++++ ti-linux-kernel/drivers/regulator/tps65218-regulator.c
+@@ -27,19 +27,21 @@
+ #include <linux/regulator/machine.h>
+ #include <linux/mfd/tps65218.h>
+ 
+-enum tps65218_regulators { DCDC1, DCDC2, DCDC3, DCDC4, DCDC5, DCDC6, LDO1 };
++enum tps65218_regulators { DCDC1, DCDC2, DCDC3, DCDC4, DCDC5, DCDC6, LS2, LS3, LDO1 };
+ 
+-#define TPS65218_REGULATOR(_name, _id, _ops, _n, _vr, _vm, _er, _em, \
+-			    _lr, _nlr, _delay, _fuv, _sr, _sm)	\
++#define TPS65218_REGULATOR(_name, _id, _type, _ops, _n, _vr, _vm, _er, _em,	\
++			    _cr, _cm, _lr, _nlr, _delay, _fuv, _sr, _sm)	\
+ 	{							\
+ 		.name			= _name,		\
+ 		.id			= _id,			\
+ 		.ops			= &_ops,		\
+ 		.n_voltages		= _n,			\
+-		.type			= REGULATOR_VOLTAGE,	\
++		.type			= _type,		\
+ 		.owner			= THIS_MODULE,		\
+ 		.vsel_reg		= _vr,			\
+ 		.vsel_mask		= _vm,			\
++		.csel_reg		= _cr,			\
++		.csel_mask		= _cm,			\
+ 		.enable_reg		= _er,			\
+ 		.enable_mask		= _em,			\
+ 		.volt_table		= NULL,			\
+@@ -81,6 +83,10 @@ static struct tps_info tps65218_pmic_reg
+ 	TPS65218_INFO(DCDC4, "DCDC4", 1175000, 3400000),
+ 	TPS65218_INFO(DCDC5, "DCDC5", 1000000, 1000000),
+ 	TPS65218_INFO(DCDC6, "DCDC6", 1800000, 1800000),
++/* Added by MYIR, add LS2/LS3 control */
++	TPS65218_INFO(LS2, "LS2", 5000000, 5000000),
++	TPS65218_INFO(LS3, "LS3", 5000000, 5000000),
++
+ 	TPS65218_INFO(LDO1, "LDO1", 900000, 3400000),
+ };
+ 
+@@ -97,6 +103,9 @@ static const struct of_device_id tps6521
+ 	TPS65218_OF_MATCH("ti,tps65218-dcdc4", tps65218_pmic_regs[DCDC4]),
+ 	TPS65218_OF_MATCH("ti,tps65218-dcdc5", tps65218_pmic_regs[DCDC5]),
+ 	TPS65218_OF_MATCH("ti,tps65218-dcdc6", tps65218_pmic_regs[DCDC6]),
++/* Added by MYIR, add LS2/LS3 control  */
++	TPS65218_OF_MATCH("ti,tps65218-ls2", tps65218_pmic_regs[LS2]),
++	TPS65218_OF_MATCH("ti,tps65218-ls3", tps65218_pmic_regs[LS3]),
+ 	TPS65218_OF_MATCH("ti,tps65218-ldo1", tps65218_pmic_regs[LDO1]),
+ 	{ }
+ };
+@@ -232,42 +241,143 @@ static struct regulator_ops tps65218_dcd
+ 	.set_suspend_disable	= tps65218_pmic_set_suspend_disable,
+ };
+ 
++/* Operations permitted on LS2/LS3 */
++static const int ls23_currents[] = { 100, 200, 500, 1000 };
++
++static int tps65218_pmic_set_input_current_lim(struct regulator_dev *dev,
++					       int lim_uA)
++{
++	unsigned int index = 0;
++	unsigned int num_currents = ARRAY_SIZE(ls23_currents);
++	struct tps65218 *tps = rdev_get_drvdata(dev);
++
++	while (index < num_currents && ls23_currents[index] != lim_uA)
++		index++;
++
++	if (index == num_currents)
++		return -EINVAL;
++
++	if (dev->desc->csel_mask == TPS65218_CONFIG2_LS3ILIM_MASK)
++		return tps65218_set_bits(tps, dev->desc->csel_reg, dev->desc->csel_mask,
++					 index << 2, TPS65218_PROTECT_L1);
++	else
++		return tps65218_set_bits(tps, dev->desc->csel_reg, dev->desc->csel_mask,
++					 index, TPS65218_PROTECT_L1);
++
++}
++
++static int tps65218_pmic_set_current_limit(struct regulator_dev *dev,
++					   int min_uA, int max_uA)
++{
++	int index = 0;
++	unsigned int num_currents = ARRAY_SIZE(ls23_currents);
++	struct tps65218 *tps = rdev_get_drvdata(dev);
++
++	while (index < num_currents && ls23_currents[index] < max_uA)
++		index++;
++
++	index--;
++
++	if (index < 0 || ls23_currents[index] < min_uA)
++		return -EINVAL;
++
++	if (dev->desc->csel_mask == TPS65218_CONFIG2_LS3ILIM_MASK)
++		return tps65218_set_bits(tps, dev->desc->csel_reg, dev->desc->csel_mask,
++					 index << 2, TPS65218_PROTECT_L1);
++	else
++		return tps65218_set_bits(tps, dev->desc->csel_reg, dev->desc->csel_mask,
++					 index, TPS65218_PROTECT_L1);
++}
++
++static int tps65218_pmic_get_current_limit(struct regulator_dev *dev)
++{
++	int retval;
++	unsigned int index;
++	struct tps65218 *tps = rdev_get_drvdata(dev);
++
++	retval = tps65218_reg_read(tps, dev->desc->csel_reg, &index);
++	if (retval < 0)
++		return retval;
++
++	if (dev->desc->csel_mask == TPS65218_CONFIG2_LS3ILIM_MASK)
++		index = (index & dev->desc->csel_mask) >> 2;
++	else
++		index = (index & dev->desc->csel_mask);
++
++	return ls23_currents[index];
++}
++
++static struct regulator_ops tps65218_ls23_pmic_ops = {
++	.is_enabled		= regulator_is_enabled_regmap,
++	.enable			= tps65218_pmic_enable,
++	.disable		= tps65218_pmic_disable,
++	.set_input_current_limit = tps65218_pmic_set_input_current_lim,
++	.set_current_limit	= tps65218_pmic_set_current_limit,
++	.get_current_limit	= tps65218_pmic_get_current_limit,
++};
++
+ static const struct regulator_desc regulators[] = {
+-	TPS65218_REGULATOR("DCDC1", TPS65218_DCDC_1, tps65218_dcdc12_ops, 64,
++	TPS65218_REGULATOR("DCDC1", TPS65218_DCDC_1,
++			   REGULATOR_VOLTAGE, tps65218_dcdc12_ops, 64,
+ 			   TPS65218_REG_CONTROL_DCDC1,
+-			   TPS65218_CONTROL_DCDC1_MASK,
+-			   TPS65218_REG_ENABLE1, TPS65218_ENABLE1_DC1_EN,
+-			   dcdc1_dcdc2_ranges, 2, 4000, 0, TPS65218_REG_SEQ3,
++			   TPS65218_CONTROL_DCDC1_MASK, TPS65218_REG_ENABLE1,
++			   TPS65218_ENABLE1_DC1_EN, 0, 0, dcdc1_dcdc2_ranges,
++			   2, 4000, 0, TPS65218_REG_SEQ3,
+ 			   TPS65218_SEQ3_DC1_SEQ_MASK),
+-	TPS65218_REGULATOR("DCDC2", TPS65218_DCDC_2, tps65218_dcdc12_ops, 64,
++	TPS65218_REGULATOR("DCDC2", TPS65218_DCDC_2,
++			   REGULATOR_VOLTAGE, tps65218_dcdc12_ops, 64,
+ 			   TPS65218_REG_CONTROL_DCDC2,
+-			   TPS65218_CONTROL_DCDC2_MASK,
+-			   TPS65218_REG_ENABLE1, TPS65218_ENABLE1_DC2_EN,
+-			   dcdc1_dcdc2_ranges, 2, 4000, 0, TPS65218_REG_SEQ3,
++			   TPS65218_CONTROL_DCDC2_MASK, TPS65218_REG_ENABLE1,
++			   TPS65218_ENABLE1_DC2_EN, 0, 0, dcdc1_dcdc2_ranges,
++			   2, 4000, 0, TPS65218_REG_SEQ3,
+ 			   TPS65218_SEQ3_DC2_SEQ_MASK),
+-	TPS65218_REGULATOR("DCDC3", TPS65218_DCDC_3, tps65218_ldo1_dcdc34_ops,
++	TPS65218_REGULATOR("DCDC3", TPS65218_DCDC_3,
++			   REGULATOR_VOLTAGE, tps65218_ldo1_dcdc34_ops,
+ 			   64, TPS65218_REG_CONTROL_DCDC3,
+ 			   TPS65218_CONTROL_DCDC3_MASK, TPS65218_REG_ENABLE1,
+-			   TPS65218_ENABLE1_DC3_EN, ldo1_dcdc3_ranges, 2, 0, 0,
+-			   TPS65218_REG_SEQ4, TPS65218_SEQ4_DC3_SEQ_MASK),
+-	TPS65218_REGULATOR("DCDC4", TPS65218_DCDC_4, tps65218_ldo1_dcdc34_ops,
++			   TPS65218_ENABLE1_DC3_EN, 0, 0, ldo1_dcdc3_ranges,
++			   2, 0, 0, TPS65218_REG_SEQ4,
++			   TPS65218_SEQ4_DC3_SEQ_MASK),
++	TPS65218_REGULATOR("DCDC4", TPS65218_DCDC_4,
++			   REGULATOR_VOLTAGE, tps65218_ldo1_dcdc34_ops,
+ 			   53, TPS65218_REG_CONTROL_DCDC4,
+-			   TPS65218_CONTROL_DCDC4_MASK,
+-			   TPS65218_REG_ENABLE1, TPS65218_ENABLE1_DC4_EN,
+-			   dcdc4_ranges, 2, 0, 0, TPS65218_REG_SEQ4,
++			   TPS65218_CONTROL_DCDC4_MASK, TPS65218_REG_ENABLE1,
++			   TPS65218_ENABLE1_DC4_EN, 0, 0, dcdc4_ranges,
++			   2, 0, 0, TPS65218_REG_SEQ4,
+ 			   TPS65218_SEQ4_DC4_SEQ_MASK),
+-	TPS65218_REGULATOR("DCDC5", TPS65218_DCDC_5, tps65218_dcdc56_pmic_ops,
+-			   1, -1, -1, TPS65218_REG_ENABLE1,
+-			   TPS65218_ENABLE1_DC5_EN, NULL, 0, 0, 1000000,
+-			   TPS65218_REG_SEQ5, TPS65218_SEQ5_DC5_SEQ_MASK),
+-	TPS65218_REGULATOR("DCDC6", TPS65218_DCDC_6, tps65218_dcdc56_pmic_ops,
+-			   1, -1, -1, TPS65218_REG_ENABLE1,
+-			   TPS65218_ENABLE1_DC6_EN, NULL, 0, 0, 1800000,
+-			   TPS65218_REG_SEQ5, TPS65218_SEQ5_DC6_SEQ_MASK),
+-	TPS65218_REGULATOR("LDO1", TPS65218_LDO_1, tps65218_ldo1_dcdc34_ops, 64,
+-			   TPS65218_REG_CONTROL_LDO1,
++	TPS65218_REGULATOR("DCDC5", TPS65218_DCDC_5,
++			   REGULATOR_VOLTAGE, tps65218_dcdc56_pmic_ops,
++			   1, -1,
++			   -1, TPS65218_REG_ENABLE1,
++			   TPS65218_ENABLE1_DC5_EN, 0, 0, NULL,
++			   0, 0, 1000000, TPS65218_REG_SEQ5,
++			   TPS65218_SEQ5_DC5_SEQ_MASK),
++	TPS65218_REGULATOR("DCDC6", TPS65218_DCDC_6,
++			   REGULATOR_VOLTAGE, tps65218_dcdc56_pmic_ops,
++			   1, -1,
++			   -1, TPS65218_REG_ENABLE1,
++			   TPS65218_ENABLE1_DC6_EN, 0, 0, NULL,
++			    0, 0, 1800000, TPS65218_REG_SEQ5,
++			   TPS65218_SEQ5_DC6_SEQ_MASK),
++/* MYIR */
++	TPS65218_REGULATOR("LS2", TPS65218_LS_2,
++			   REGULATOR_CURRENT, tps65218_ls23_pmic_ops,
++			   0, 0,
++			   0, TPS65218_REG_ENABLE2,
++			   TPS65218_ENABLE2_LS2_EN, TPS65218_REG_CONFIG2, TPS65218_CONFIG2_LS2ILIM_MASK, NULL,
++			   0, 0, 0, 0, 0),
++	TPS65218_REGULATOR("LS3", TPS65218_LS_3,
++			   REGULATOR_CURRENT, tps65218_ls23_pmic_ops,
++			   0, 0,
++			   0, TPS65218_REG_ENABLE2,
++			   TPS65218_ENABLE2_LS3_EN, TPS65218_REG_CONFIG2, TPS65218_CONFIG2_LS3ILIM_MASK, NULL,
++			   0, 0, 0, 0, 0),
++
++	TPS65218_REGULATOR("LDO1", TPS65218_LDO_1,
++			   REGULATOR_VOLTAGE, tps65218_ldo1_dcdc34_ops,
++			   64, TPS65218_REG_CONTROL_LDO1,
+ 			   TPS65218_CONTROL_LDO1_MASK, TPS65218_REG_ENABLE2,
+-			   TPS65218_ENABLE2_LDO1_EN, ldo1_dcdc3_ranges,
++			   TPS65218_ENABLE2_LDO1_EN, 0, 0, ldo1_dcdc3_ranges,
+ 			   2, 0, 0, TPS65218_REG_SEQ6,
+ 			   TPS65218_SEQ6_LDO1_SEQ_MASK),
+ };
+Index: ti-linux-kernel/include/linux/mfd/tps65218.h
+===================================================================
+--- ti-linux-kernel.orig/include/linux/mfd/tps65218.h
++++ ti-linux-kernel/include/linux/mfd/tps65218.h
+@@ -205,6 +205,11 @@ enum tps65218_regulator_id {
+ 	TPS65218_DCDC_4,
+ 	TPS65218_DCDC_5,
+ 	TPS65218_DCDC_6,
++
++	/* MYIR, add for usb vbus control */
++	TPS65218_LS_2,
++	TPS65218_LS_3,
++
+ 	/* LDOs */
+ 	TPS65218_LDO_1,
+ };
+@@ -215,8 +220,10 @@ enum tps65218_regulator_id {
+ #define TPS65218_NUM_DCDC		6
+ /* Number of LDO voltage regulators available */
+ #define TPS65218_NUM_LDO		1
++/* MYIR, Number of load switch voltage regulators available */
++#define TPS65218_NUM_LS			2
+ /* Number of total regulators available */
+-#define TPS65218_NUM_REGULATOR		(TPS65218_NUM_DCDC + TPS65218_NUM_LDO)
++#define TPS65218_NUM_REGULATOR		(TPS65218_NUM_DCDC + TPS65218_NUM_LDO + TPS65218_NUM_LS/* MYIR */)
+ 
+ /* Define the TPS65218 IRQ numbers */
+ enum tps65218_irqs {
+Index: ti-linux-kernel/include/linux/regulator/driver.h
+===================================================================
+--- ti-linux-kernel.orig/include/linux/regulator/driver.h
++++ ti-linux-kernel/include/linux/regulator/driver.h
+@@ -302,6 +302,8 @@ struct regulator_desc {
+ 
+ 	unsigned int vsel_reg;
+ 	unsigned int vsel_mask;
++        unsigned int csel_reg;
++        unsigned int csel_mask;
+ 	unsigned int apply_reg;
+ 	unsigned int apply_bit;
+ 	unsigned int enable_reg;
