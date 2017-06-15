@@ -16,16 +16,16 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 ===================================================================
 --- /dev/null
 +++ ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.dts
-@@ -0,0 +1,1071 @@
+@@ -0,0 +1,1196 @@
 +/*
-+ * Copyright (C) 2015 MYIR Tech Limited. - http://www.myirtech.com
++ * Copyright (C) 2013 Texas Instruments Incorporated - http://www.ti.com/
 + *
 + * This program is free software; you can redistribute it and/or modify
 + * it under the terms of the GNU General Public License version 2 as
 + * published by the Free Software Foundation.
 + */
 +
-+/* MYIR Rico Board */
++/* MYIR Rico Board AM437x */
 +
 +/dts-v1/;
 +
@@ -33,14 +33,14 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +#include <dt-bindings/pinctrl/am43xx.h>
 +#include <dt-bindings/pwm/pwm.h>
 +#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/sound/sii9022-audio.h>
 +
 +/ {
 +	model = "MYIR Rico Board";
 +	compatible = "myir,ricoboard","ti,am4372","ti,am43";
 +
 +	aliases {
-+		display0 = &lcd0;
-+		display1 = &hdmi0;
++		display0 = &hdmi0;
 +	};
 +
 +	vmmcsd_fixed: fixedregulator-sd {
@@ -51,18 +51,19 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		enable-active-high;
 +	};
 +
-+	evm_v3p3: tps63031 {
-+		compatible = "regulator-fixed";
-+		regulator-name = "evm_v3p3";
-+		regulator-min-microvolt = <3300000>;
-+		regulator-max-microvolt = <3300000>;
++	lcd_bl: backlight {
++		compatible = "pwm-backlight";
++		pwms = <&ecap0 0 50000 PWM_POLARITY_INVERTED>;
++		brightness-levels = <0 51 53 56 62 75 101 152 255>;
++		default-brightness-level = <1>;
 +	};
 +
-+	lcd0: display@0 {
++	lcd0: display {
 +		compatible = "osddisplays,osd057T0559-34ts", "panel-dpi";
++		label = "lcd";
 +
 +		panel-timing {
-+			clock-frequency = <36000000>;
++			clock-frequency = <33000000>;
 +			hactive = <800>;
 +			vactive = <480>;
 +			hfront-porch = <210>;
@@ -85,9 +86,10 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +	};
 +
 +	/* 4.3 inch, 480x272 resolution LCD, MYiR */
-+/*	lcd0: display@0 {
++/*	lcd0: display {
 +		compatible = "osddisplays,osd057T0559-34ts", "panel-dpi";
-+
++		video-source = <&dpi>;
++		data-lines = <24>;
 +		panel-timing {
 +			clock-frequency = <9600000>;
 +			hactive = <480>;
@@ -111,35 +113,18 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		};
 +	};
 +*/
-+	hdmi0: connector@1 {
++
++	hdmi0: connector {
 +		compatible = "hdmi-connector";
-+		label = "hdmi";
++		label = "hdmi0";
++
++		type = "b";
 +
 +		port {
 +			hdmi_connector_in: endpoint {
 +				remote-endpoint = <&sii9022_out>;
 +			};
 +		};
-+	};
-+
-+	/* fixed 32k external oscillator clock */
-+	clk_32k_rtc: clk_32k_rtc {
-+		#clock-cells = <0>;
-+		compatible = "fixed-clock";
-+		clock-frequency = <32768>;
-+	};
-+
-+	sound {
-+		compatible = "ti,da830-evm-audio";
-+		ti,model = "AM437x-GP-EVM";
-+		ti,audio-codec = <&tlv320aic3106>;
-+		ti,mcasp-controller = <&mcasp1>;
-+		ti,codec-clock-rate = <12000000>;
-+		ti,audio-routing =
-+			"Headphone Jack",       "HPLOUT",
-+			"Headphone Jack",       "HPROUT",
-+			"LINE1L",               "Line In",
-+			"LINE1R",               "Line In";
 +	};
 +
 +	/* Gpio keys, MYiR */
@@ -192,24 +177,138 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		};
 +	};
 +
-+	backlight {
-+		compatible = "pwm-backlight";
-+		pwms = <&ecap0 0 50000 PWM_POLARITY_INVERTED>;
-+		brightness-levels = <0 51 53 56 62 75 101 152 255>;
-+		default-brightness-level = <1>;
++	/* fixed 12MHz oscillator */
++	refclk: oscillator {
++		#clock-cells = <0>;
++		compatible = "fixed-clock";
++		clock-frequency = <12000000>;
 +	};
 +
-+	cpus {
-+		cpu@0 {
-+			cpu0-supply = <&dcdc2>;
++	/* fixed 32k external oscillator clock */
++	clk_32k_rtc: clk_32k_rtc {
++		#clock-cells = <0>;
++		compatible = "fixed-clock";
++		clock-frequency = <32768>;
++	};
++
++/*
++	sound0: sound@0 {
++		compatible = "simple-audio-card";
++		simple-audio-card,name = "AM437x-GP-EVM";
++		simple-audio-card,widgets =
++			"Headphone", "Headphone Jack",
++			"Line", "Line In";
++		simple-audio-card,routing =
++			"Headphone Jack",	"HPLOUT",
++			"Headphone Jack",	"HPROUT",
++			"LINE1L",		"Line In",
++			"LINE1R",		"Line In";
++		simple-audio-card,format = "dsp_b";
++		simple-audio-card,bitclock-master = <&sound0_master>;
++		simple-audio-card,frame-master = <&sound0_master>;
++		simple-audio-card,bitclock-inversion;
++
++		simple-audio-card,cpu {
++			sound-dai = <&mcasp1>;
++			system-clock-frequency = <12000000>;
++		};
++
++		sound0_master: simple-audio-card,codec {
++			sound-dai = <&tlv320aic3106>;
++			system-clock-frequency = <12000000>;
 +		};
 +	};
++
++	sound@1 {
++		compatible = "simple-audio-card";
++		simple-audio-card,name = "HDMI";
++		simple-audio-card,format = "i2s";
++		simple-audio-card,bitclock-master = <&hdmi_dailink_master>;
++		simple-audio-card,frame-master = <&hdmi_dailink_master>;
++		hdmi_dailink_master: simple-audio-card,cpu {
++			sound-dai = <&mcasp1>;
++			system-clock-frequency = <24000000>;
++			system-clock-direction = "out";
++		};
++
++		simple-audio-card,codec {
++			sound-dai = <&sii9022>;
++			system-clock-frequency = <12000000>;
++		};
++	};
++
++*/
++
++
 +};
 +
 +&am43xx_pinmux {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&clkout2_pin &ddr3_vtt_toggle_default>;
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&clkout2_pin &ddr3_vtt_toggle_default &unused_pins &debugss_pins>;
 +	pinctrl-1 = <&clkout1_pin>;
++
++	ddr3_vtt_toggle_default: ddr_vtt_toggle_default {
++		pinctrl-single,pins = <
++			0x25C (DS0_PULL_UP_DOWN_EN | PIN_OUTPUT_PULLUP | DS0_FORCE_OFF_MODE | MUX_MODE7) /* spi0_cs0.gpio5_7 */
++		>;
++	};
++
++	i2c0_pins: i2c0_pins {
++		pinctrl-single,pins = <
++			0x188 (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE0)  /* i2c0_sda.i2c0_sda */
++			0x18c (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE0)  /* i2c0_scl.i2c0_scl */
++		>;
++	};
++
++	i2c1_pins_default: i2c1_pins_default {
++		pinctrl-single,pins = <
++			0x240 (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE1)  /* i2c1_scl */
++			0x248 (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE1)  /* i2c1_sda  */
++		>;
++	};
++
++	i2c1_pins_sleep: i2c1_pins_sleep {
++		pinctrl-single,pins = <
++			0x15c (PIN_INPUT_PULLUP | MUX_MODE7)
++			0x158 (PIN_INPUT_PULLUP | MUX_MODE7)
++		>;
++	};
++
++	mmc1_pins: pinmux_mmc1_pins {
++		pinctrl-single,pins = <
++			0x100 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_clk.mmc0_clk */
++			0x104 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_cmd.mmc0_cmd */
++			0x0f0 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat0.mmc0_dat0 */
++			0x0f4 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat1.mmc0_dat1 */
++			0x0f8 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat2.mmc0_dat2 */
++			0x0fc (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat3.mmc0_dat3 */
++			0x160 (PIN_INPUT | MUX_MODE7) /* spi0_cs1.gpio0_6 */
++		>;
++	};
++
++	mmc1_sleep_pins: pinmux_mmc1_sleep_pins {
++		pinctrl-single,pins = <
++			0x100 (PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x104 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x0f0 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x0f4 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x0f8 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x0fc (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x160 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++		>;
++	};
++
++	ecap0_pins_default: backlight_pins_default {
++		pinctrl-single,pins = <
++			0x164 MUX_MODE0       /* eCAP0_in_PWM0_out.eCAP0_in_PWM0_out MODE0 */
++		>;
++	};
++
++	ecap0_pins_sleep: backlight_pins_sleep {
++		pinctrl-single,pins = <
++			0x164 (PIN_INPUT_PULLDOWN | MUX_MODE7)
++		>;
++	};
 +
 +	cpsw_default: cpsw_default {
 +		pinctrl-single,pins = <
@@ -240,10 +339,10 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +			0x128 (PIN_INPUT_PULLDOWN | MUX_MODE7)
 +			0x12c (PIN_INPUT_PULLDOWN | MUX_MODE7)
 +			0x130 (PIN_INPUT_PULLDOWN | MUX_MODE7)
-+			0x134 (PIN_INPUT_PULLDOWN | MUX_MODE7)
-+			0x138 (PIN_INPUT_PULLDOWN | MUX_MODE7)
-+			0x13c (PIN_INPUT_PULLDOWN | MUX_MODE7)
-+			0x140 (PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x134 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x138 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x13c (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x140 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
 +		>;
 +	};
 +
@@ -258,66 +357,48 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +	davinci_mdio_sleep: davinci_mdio_sleep {
 +		pinctrl-single,pins = <
 +			/* MDIO reset value */
-+			0x148 (PIN_INPUT_PULLDOWN | MUX_MODE7)
-+			0x14c (PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x148 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x14c (PIN_INPUT | PULL_DISABLE | MUX_MODE7)
 +		>;
 +	};
 +
-+	mmc1_pins: pinmux_mmc1_pins {
++	nand_flash_x8_default: nand_flash_x8_default {
 +		pinctrl-single,pins = <
-+			0x100 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_clk.mmc0_clk */
-+			0x104 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_cmd.mmc0_cmd */
-+			0x0f0 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat0.mmc0_dat0 */
-+			0x0f4 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat1.mmc0_dat1 */
-+			0x0f8 (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat2.mmc0_dat2 */
-+			0x0fc (PIN_INPUT_PULLUP | MUX_MODE0) /* mmc0_dat3.mmc0_dat3 */
-+			0x160 (PIN_INPUT | MUX_MODE7) /* spi0_cs1.gpio0_6 */
++			0x0  (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad0.gpmc_ad0 */
++			0x4  (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad1.gpmc_ad1 */
++			0x8  (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad2.gpmc_ad2 */
++			0xc  (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad3.gpmc_ad3 */
++			0x10 (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad4.gpmc_ad4 */
++			0x14 (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad5.gpmc_ad5 */
++			0x18 (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad6.gpmc_ad6 */
++			0x1c (PIN_INPUT  | MUX_MODE0)	/* gpmc_ad7.gpmc_ad7 */
++			0x70 (PIN_INPUT_PULLUP | MUX_MODE0)	/* gpmc_wait0.gpmc_wait0 */
++			0x74 (PIN_OUTPUT_PULLUP | MUX_MODE7)	/* gpmc_wpn.gpmc_wpn */
++			0x7c (PIN_OUTPUT | MUX_MODE0)		/* gpmc_csn0.gpmc_csn0  */
++			0x90 (PIN_OUTPUT | MUX_MODE0)		/* gpmc_advn_ale.gpmc_advn_ale */
++			0x94 (PIN_OUTPUT | MUX_MODE0)		/* gpmc_oen_ren.gpmc_oen_ren */
++			0x98 (PIN_OUTPUT | MUX_MODE0)		/* gpmc_wen.gpmc_wen */
++			0x9c (PIN_OUTPUT | MUX_MODE0)		/* gpmc_be0n_cle.gpmc_be0n_cle */
 +		>;
 +	};
 +
-+	mmc1_sleep_pins: pinmux_mmc1_sleep_pins {
++	nand_flash_x8_sleep: nand_flash_x8_sleep {
 +		pinctrl-single,pins = <
-+			0x100 (PIN_INPUT | MUX_MODE0) /* mmc0_clk.mmc0_clk */
-+			0x104 (PIN_INPUT | MUX_MODE0) /* mmc0_cmd.mmc0_cmd */
-+			0x0f0 (PIN_INPUT | MUX_MODE0) /* mmc0_dat0.mmc0_dat0 */
-+			0x0f4 (PIN_INPUT | MUX_MODE0) /* mmc0_dat1.mmc0_dat1 */
-+			0x0f8 (PIN_INPUT | MUX_MODE0) /* mmc0_dat2.mmc0_dat2 */
-+			0x0fc (PIN_INPUT | MUX_MODE0) /* mmc0_dat3.mmc0_dat3 */
-+		>;
-+	};
-+
-+	emmc_pins: pinmux_emmc_pins {
-+		pinctrl-single,pins = <
-+			0x80 (PIN_INPUT_PULLUP | MUX_MODE2) /* gpmc_csn1.mmc1_clk */
-+			0x84 (PIN_INPUT_PULLUP | MUX_MODE2) /* gpmc_csn2.mmc1_cmd */
-+			0x00 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad0.mmc1_dat0 */
-+			0x04 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad1.mmc1_dat1 */
-+			0x08 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad2.mmc1_dat2 */
-+			0x0c (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad3.mmc1_dat3 */
-+			0x10 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad4.mmc1_dat4 */
-+			0x14 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad5.mmc1_dat5 */
-+			0x18 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad6.mmc1_dat6 */
-+			0x1c (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad7.mmc1_dat7 */
-+		>;
-+	};
-+
-+	ddr3_vtt_toggle_default: ddr_vtt_toggle_default {
-+		pinctrl-single,pins = <
-+			0x25C (DS0_PULL_UP_DOWN_EN | PIN_OUTPUT_PULLUP | DS0_FORCE_OFF_MODE | MUX_MODE7) /* spi0_cs0.gpio5_7 */
-+		>;
-+	};
-+
-+	i2c0_pins: pinmux_i2c0_pins {
-+		pinctrl-single,pins = <
-+			0x188 (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE0)    /* i2c0_sda.i2c0_sda */
-+			0x18c (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE0)    /* i2c0_scl.i2c0_scl */
-+		>;
-+	};
-+
-+	i2c1_pins: i2c1_pins {
-+		pinctrl-single,pins = <
-+			0x240   (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE1)  /* i2c1_scl */
-+			0x248   (PIN_INPUT_PULLUP | SLEWCTRL_FAST | MUX_MODE1)  /* i2c1_sda */
++			0x0  (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad0.gpmc_ad0 */
++			0x4  (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad1.gpmc_ad1 */
++			0x8  (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad2.gpmc_ad2 */
++			0xc  (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad3.gpmc_ad3 */
++			0x10 (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad4.gpmc_ad4 */
++			0x14 (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad5.gpmc_ad5 */
++			0x18 (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad6.gpmc_ad6 */
++			0x1c (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_ad7.gpmc_ad7 */
++			0x70 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)	/* gpmc_wait0.gpmc_wait0 */
++			0x74 (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_wpn.gpmc_wpn */
++			0x7c (PIN_INPUT | PULL_DISABLE | MUX_MODE7)		/* gpmc_csn0.gpmc_csn0  */
++			0x90 (PIN_INPUT | PULL_DISABLE | MUX_MODE7)		/* gpmc_advn_ale.gpmc_advn_ale */
++			0x94 (PIN_INPUT_PULLDOWN | MUX_MODE7)		/* gpmc_oen_ren.gpmc_oen_ren */
++			0x98 (PIN_INPUT_PULLDOWN |  MUX_MODE7)		/* gpmc_wen.gpmc_wen */
++			0x9c (PIN_INPUT | PULL_DISABLE | MUX_MODE7)		/* gpmc_be0n_cle.gpmc_be0n_cle */
 +		>;
 +	};
 +
@@ -326,32 +407,32 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +			0x020 (PIN_OUTPUT_PULLUP | MUX_MODE1) /*gpmc ad 8 -> DSS DATA 23 */
 +			0x024 (PIN_OUTPUT_PULLUP | MUX_MODE1)
 +			0x028 (PIN_OUTPUT_PULLUP | MUX_MODE1)
-+			0x02C (PIN_OUTPUT_PULLUP | MUX_MODE1)
++			0x02c (PIN_OUTPUT_PULLUP | MUX_MODE1)
 +			0x030 (PIN_OUTPUT_PULLUP | MUX_MODE1)
 +			0x034 (PIN_OUTPUT_PULLUP | MUX_MODE1)
 +			0x038 (PIN_OUTPUT_PULLUP | MUX_MODE1)
-+			0x03C (PIN_OUTPUT_PULLUP | MUX_MODE1) /*gpmc ad 15 -> DSS DATA 16 */
-+			0x0A0 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS DATA 0 */
-+			0x0A4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0A8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0AC (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0B0 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0B4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0B8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0BC (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0C0 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0C4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0C8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0CC (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0D0 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0D4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0D8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
-+			0x0DC (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS DATA 15 */
-+			0x0E0 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS VSYNC */
-+			0x0E4 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS HSYNC */
-+			0x0E8 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS PCLK */
-+			0x0EC (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS AC BIAS EN */
-+			0x238 (PIN_OUTPUT_PULLUP | MUX_MODE7) /* GPIO 5_8 to select LCD / HDMI */
++			0x03c (PIN_OUTPUT_PULLUP | MUX_MODE1) /*gpmc ad 15 -> DSS DATA 16 */
++			0x0a0 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS DATA 0 */
++			0x0a4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0a8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0ac (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0b0 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0b4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0b8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0bc (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0c0 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0c4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0c8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0cc (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0d0 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0d4 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0d8 (PIN_OUTPUT_PULLUP | MUX_MODE0)
++			0x0dc (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS DATA 15 */
++			0x0e0 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS VSYNC */
++			0x0e4 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS HSYNC */
++			0x0e8 (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS PCLK */
++			0x0ec (PIN_OUTPUT_PULLUP | MUX_MODE0) /* DSS AC BIAS EN */
++
 +		>;
 +	};
 +
@@ -385,19 +466,6 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +			0x0E4 (DS0_FORCE_OFF_MODE | DS0_PULL_UP_DOWN_EN | PULL_DISABLE | INPUT_EN | MUX_MODE7)
 +			0x0E8 (DS0_FORCE_OFF_MODE | DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)
 +			0x0EC (DS0_FORCE_OFF_MODE | DS0_PULL_UP_DOWN_EN | PULL_DISABLE | INPUT_EN | MUX_MODE7)
-+			0x238 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)
-+		>;
-+	};
-+
-+	ecap0_pins: backlight_pins {
-+		pinctrl-single,pins = <
-+			0x164 0x0       /* eCAP0_in_PWM0_out.eCAP0_in_PWM0_out MODE0 */
-+		>;
-+	};
-+
-+	pixcir_ts_pins: pixcir_ts_pins {
-+		pinctrl-single,pins = <
-+			0x264 (PIN_INPUT_PULLUP | MUX_MODE7)  /* spi2_d0.gpio3_22 */
 +		>;
 +	};
 +
@@ -415,15 +483,101 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +
 +	dcan0_default: dcan0_default_pins {
 +		pinctrl-single,pins = <
-+			0x178 (PIN_OUTPUT_PULLDOWN | MUX_MODE2) /* uart1_ctsn.d_can0_tx */
-+			0x17c (PIN_INPUT_PULLUP | MUX_MODE2) /* uart1_rtsn.d_can0_rx */
++			0x178 (PIN_OUTPUT | MUX_MODE2)		/* uart1_ctsn.d_can0_tx */
++			0x17c (PIN_INPUT_PULLUP | MUX_MODE2)	/* uart1_rtsn.d_can0_rx */
++		>;
++	};
++
++	dcan0_sleep: dcan0_sleep_pins {
++		pinctrl-single,pins = <
++			0x178 (PIN_INPUT_PULLUP | MUX_MODE7)	/* uart1_ctsn.gpio0_12 */
++			0x17c (PIN_INPUT_PULLUP | MUX_MODE7)	/* uart1_rtsn.gpio0_13 */
 +		>;
 +	};
 +
 +	dcan1_default: dcan1_default_pins {
 +		pinctrl-single,pins = <
-+			0x180 (PIN_OUTPUT_PULLDOWN | MUX_MODE2) /* uart1_rxd.d_can1_tx */
-+			0x184 (PIN_INPUT_PULLUP | MUX_MODE2) /* uart1_txd.d_can1_rx */
++			0x180 (PIN_OUTPUT | MUX_MODE2)		/* uart1_rxd.d_can1_tx */
++			0x184 (PIN_INPUT_PULLUP | MUX_MODE2)	/* uart1_txd.d_can1_rx */
++		>;
++	};
++
++	dcan1_sleep: dcan1_sleep_pins {
++		pinctrl-single,pins = <
++			0x180 (PIN_INPUT_PULLUP | MUX_MODE7)	/* uart1_rxd.gpio0_14 */
++			0x184 (PIN_INPUT_PULLUP | MUX_MODE7)	/* uart1_txd.gpio0_15 */
++		>;
++	};
++
++	vpfe0_pins_default: vpfe0_pins_default {
++		pinctrl-single,pins = <
++			0x1B0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_hd mode 0*/
++			0x1B4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_vd mode 0*/
++			0x1C0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_pclk mode 0*/
++			0x1C4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data8 mode 0*/
++			0x1C8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data9 mode 0*/
++			0x208 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data0 mode 0*/
++			0x20C (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data1 mode 0*/
++			0x210 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data2 mode 0*/
++			0x214 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data3 mode 0*/
++			0x218 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data4 mode 0*/
++			0x21C (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data5 mode 0*/
++			0x220 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data6 mode 0*/
++			0x224 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data7 mode 0*/
++		>;
++	};
++
++	vpfe0_pins_sleep: vpfe0_pins_sleep {
++		pinctrl-single,pins = <
++			0x1B0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_hd mode 0*/
++			0x1B4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_vd mode 0*/
++			0x1C0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_pclk mode 0*/
++			0x1C4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data8 mode 0*/
++			0x1C8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data9 mode 0*/
++			0x208 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data0 mode 0*/
++			0x20C (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data1 mode 0*/
++			0x210 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data2 mode 0*/
++			0x214 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data3 mode 0*/
++			0x218 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data4 mode 0*/
++			0x21C (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data5 mode 0*/
++			0x220 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data6 mode 0*/
++			0x224 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data7 mode 0*/
++		>;
++	};
++
++	vpfe1_pins_default: vpfe1_pins_default {
++		pinctrl-single,pins = <
++			0x1CC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data9 mode 0*/
++			0x1D0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data8 mode 0*/
++			0x1D4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_hd mode 0*/
++			0x1D8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_vd mode 0*/
++			0x1DC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_pclk mode 0*/
++			0x1E8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data0 mode 0*/
++			0x1EC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data1 mode 0*/
++			0x1F0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data2 mode 0*/
++			0x1F4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data3 mode 0*/
++			0x1F8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data4 mode 0*/
++			0x1FC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data5 mode 0*/
++			0x200 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data6 mode 0*/
++			0x204 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data7 mode 0*/
++		>;
++	};
++
++	vpfe1_pins_sleep: vpfe1_pins_sleep {
++		pinctrl-single,pins = <
++			0x1CC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data9 mode 0*/
++			0x1D0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data8 mode 0*/
++			0x1D4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_hd mode 0*/
++			0x1D8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_vd mode 0*/
++			0x1DC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_pclk mode 0*/
++			0x1E8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data0 mode 0*/
++			0x1EC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data1 mode 0*/
++			0x1F0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data2 mode 0*/
++			0x1F4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data3 mode 0*/
++			0x1F8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data4 mode 0*/
++			0x1FC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data5 mode 0*/
++			0x200 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data6 mode 0*/
++			0x204 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data7 mode 0*/
 +		>;
 +	};
 +
@@ -445,135 +599,133 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		>;
 +	};
 +
-+	nand_flash_x8: nand_flash_x8 {
++	gpio0_pins: gpio0_pins {
 +		pinctrl-single,pins = <
-+			0x26C(PIN_OUTPUT_PULLDOWN | MUX_MODE7)	/* spi2_cs0.gpio/eMMCorNANDsel */
-+			0x0  (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad0.gpmc_ad0 */
-+			0x4  (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad1.gpmc_ad1 */
-+			0x8  (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad2.gpmc_ad2 */
-+			0xc  (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad3.gpmc_ad3 */
-+			0x10 (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad4.gpmc_ad4 */
-+			0x14 (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad5.gpmc_ad5 */
-+			0x18 (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad6.gpmc_ad6 */
-+			0x1c (PIN_INPUT_PULLDOWN | MUX_MODE0)	/* gpmc_ad7.gpmc_ad7 */
-+			0x70 (PIN_INPUT_PULLUP | MUX_MODE0)	/* gpmc_wait0.gpmc_wait0 */
-+			0x74 (PIN_OUTPUT_PULLUP | MUX_MODE7)	/* gpmc_wpn.gpmc_wpn */
-+			0x7c (PIN_OUTPUT | MUX_MODE0)		/* gpmc_csn0.gpmc_csn0  */
-+			0x90 (PIN_OUTPUT | MUX_MODE0)		/* gpmc_advn_ale.gpmc_advn_ale */
-+			0x94 (PIN_OUTPUT | MUX_MODE0)		/* gpmc_oen_ren.gpmc_oen_ren */
-+			0x98 (PIN_OUTPUT | MUX_MODE0)		/* gpmc_wen.gpmc_wen */
-+			0x9c (PIN_OUTPUT | MUX_MODE0)		/* gpmc_be0n_cle.gpmc_be0n_cle */
++			0x26c (PIN_OUTPUT | MUX_MODE9) /* spi2_cs0.gpio0_23 SEL_eMMCorNANDn */
 +		>;
 +	};
 +
-+	uart0_pins: uart0_pins {
++	emmc_pins_default: emmc_pins_default {
 +		pinctrl-single,pins = <
++			0x00 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad0.mmc1_dat0 */
++			0x04 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad1.mmc1_dat1 */
++			0x08 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad2.mmc1_dat2 */
++			0x0c (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad3.mmc1_dat3 */
++			0x10 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad4.mmc1_dat4 */
++			0x14 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad5.mmc1_dat5 */
++			0x18 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad6.mmc1_dat6 */
++			0x1c (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad7.mmc1_dat7 */
++			0x80 (PIN_INPUT_PULLUP | MUX_MODE2) /* gpmc_csn1.mmc1_clk */
++			0x84 (PIN_INPUT_PULLUP | MUX_MODE2) /* gpmc_csn2.mmc1_cmd */
++		>;
++	};
++
++	emmc_pins_sleep: emmc_pins_sleep {
++		pinctrl-single,pins = <
++			0x00 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad0.gpio1_0 */
++			0x04 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad1.gpio1_1 */
++			0x08 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad2.gpio1_2 */
++			0x0c (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad3.gpio1_3 */
++			0x10 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad4.gpio1_4 */
++			0x14 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad5.gpio1_5 */
++			0x18 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad6.gpio1_6 */
++			0x1c (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_ad7.gpio1_7 */
++			0x80 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_csn1.gpio1_30 */
++			0x84 (PIN_INPUT_PULLDOWN | MUX_MODE7) /* gpmc_csn2.gpio1_31 */
++		>;
++	};
++
++	uart0_pins_default: uart0_pins_default {
++		pinctrl-single,pins = <
++			0x168 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE0)
++			0x16C (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE0)
 +			0x170 (PIN_INPUT_PULLUP | SLEWCTRL_FAST | DS0_PULL_UP_DOWN_EN | MUX_MODE0) /* uart0_rxd.uart0_rxd */
-+			0x174 (PIN_INPUT_PULLUP | SLEWCTRL_FAST | DS0_PULL_UP_DOWN_EN | MUX_MODE0) /* uart0_txd.uart0_txd */
++			0x174 (PIN_INPUT | PULL_DISABLE | SLEWCTRL_FAST | DS0_PULL_UP_DOWN_EN | MUX_MODE0) /* uart0_txd.uart0_txd */
 +		>;
 +	};
 +
-+	tsl2550: tsl2550@39 {
-+		compatible = "taos,tsl2550";
-+		reg = <0x39>;
-+	};
-+
-+	tmp275: tmp275@48 {
-+		compatible = "ti,tmp275";
-+		reg = <0x48>;
-+	};
-+
-+	vpfe0_pins_default: vpfe0_pins_default {
++	uart0_pins_sleep: uart0_pins_sleep {
 +		pinctrl-single,pins = <
-+			/*0x270 (PIN_OUTPUT_PULLUP | MUX_MODE3) */  /* xdma_event_intr0.clkout1 mode 3*/
-+			0x1B0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_hd mode 0*/
-+			0x1B4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_vd mode 0*/
-+			0x1B8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_field mode 0*/
-+			0x1BC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_wen mode 0*/
-+			0x1C0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_pclk mode 0*/
-+			0x1C4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data8 mode 0*/
-+			0x1C8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data9 mode 0*/
-+			0x208 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data0 mode 0*/
-+			0x20C (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data1 mode 0*/
-+			0x210 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data2 mode 0*/
-+			0x214 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data3 mode 0*/
-+			0x218 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data4 mode 0*/
-+			0x21C (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data5 mode 0*/
-+			0x220 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data6 mode 0*/
-+			0x224 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam0_data7 mode 0*/
++			0x168 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)
++			0x16C (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)
++			0x170 (PIN_INPUT_PULLUP | SLEWCTRL_FAST | DS0_PULL_UP_DOWN_EN | MUX_MODE0) /* uart0_rxd.uart0_rxd */
++			0x174 (PIN_INPUT_PULLDOWN | SLEWCTRL_FAST | DS0_PULL_UP_DOWN_EN | MUX_MODE0) /* uart0_txd.uart0_txd */
 +		>;
 +	};
 +
-+	vpfe0_pins_sleep: vpfe0_pins_sleep {
++	matrix_keypad_default: matrix_keypad_default {
 +		pinctrl-single,pins = <
-+			0x1B0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_hd mode 0*/
-+			0x1B4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_vd mode 0*/
-+			0x1B8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_field mode 0*/
-+			0x1BC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_wen mode 0*/
-+			0x1C0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_pclk mode 0*/
-+			0x1C4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data8 mode 0*/
-+			0x1C8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data9 mode 0*/
-+			0x208 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data0 mode 0*/
-+			0x20C (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data1 mode 0*/
-+			0x210 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data2 mode 0*/
-+			0x214 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data3 mode 0*/
-+			0x218 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data4 mode 0*/
-+			0x21C (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data5 mode 0*/
-+			0x220 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data6 mode 0*/
-+			0x224 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam0_data7 mode 0*/
++			0x1a4 (PIN_OUTPUT | MUX_MODE7)
++			0x1a8 (PIN_OUTPUT | MUX_MODE7)
++			0x1ac (PIN_INPUT | PULL_DISABLE | MUX_MODE9)	/* mcasp0_ahclkx.gpio0_3 */
++			0x154 (PIN_INPUT_PULLDOWN | MUX_MODE0)
 +		>;
 +	};
 +
-+	vpfe1_pins_default: vpfe1_pins_default {
++	matrix_keypad_sleep: matrix_keypad_sleep {
 +		pinctrl-single,pins = <
-+			/* 0x270 (PIN_OUTPUT_PULLUP | MUX_MODE3) */ /* xdma_event_intr0.clkout1 mode 3*/
-+			0x1CC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data9 mode 0*/
-+			0x1D0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data8 mode 0*/
-+			0x1D4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_hd mode 0*/
-+			0x1D8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_vd mode 0*/
-+			0x1DC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_pclk mode 0*/
-+			0x1E0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_field mode 0*/
-+			0x1E4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_wen mode 0*/
-+			0x1E8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data0 mode 0*/
-+			0x1EC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data1 mode 0*/
-+			0x1F0 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data2 mode 0*/
-+			0x1F4 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data3 mode 0*/
-+			0x1F8 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data4 mode 0*/
-+			0x1FC (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data5 mode 0*/
-+			0x200 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data6 mode 0*/
-+			0x204 (PIN_INPUT_PULLUP | MUX_MODE0)  /* cam1_data7 mode 0*/
++			0x1a4 (PULL_UP | MUX_MODE7)
++			0x1a8 (PULL_UP | MUX_MODE7)
++			0x1ac (PIN_INPUT | PULL_DISABLE | MUX_MODE9)
++			0x154 (PIN_INPUT_PULLDOWN | MUX_MODE0)
 +		>;
 +	};
 +
-+	vpfe1_pins_sleep: vpfe1_pins_sleep {
++	unused_pins: unused_pins {
 +		pinctrl-single,pins = <
-+			0x1CC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data9 mode 0*/
-+			0x1D0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data8 mode 0*/
-+			0x1D4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_hd mode 0*/
-+			0x1D8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_vd mode 0*/
-+			0x1DC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_pclk mode 0*/
-+			0x1E0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_field mode 0*/
-+			0x1E4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_wen mode 0*/
-+			0x1E8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data0 mode 0*/
-+			0x1EC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data1 mode 0*/
-+			0x1F0 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data2 mode 0*/
-+			0x1F4 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data3 mode 0*/
-+			0x1F8 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data4 mode 0*/
-+			0x1FC (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data5 mode 0*/
-+			0x200 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data6 mode 0*/
-+			0x204 (DS0_PULL_UP_DOWN_EN | INPUT_EN | MUX_MODE7)  /* cam1_data7 mode 0*/
++			0x54	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x58	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x60	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x64	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x68	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x6C	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x150	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x190	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x194	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x198	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x19C	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x1A0	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x23C	(PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x244	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x24C	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x250	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x254	(PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x258	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x260	(PIN_INPUT | PULL_DISABLE | MUX_MODE7)
++			0x268	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x270	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x278	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x27C	(PIN_INPUT | PULL_DISABLE)
++			0x2C8	(PIN_INPUT_PULLDOWN)
++			0x2D4	(PIN_INPUT_PULLDOWN)
++			0x2D8	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2DC	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2E0	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2E4	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2E8	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2EC	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2F0	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2F4	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2F8	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x2FC	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x300	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x304	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x308	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x30C	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x310	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x314	(PIN_INPUT_PULLDOWN | MUX_MODE7)
++			0x318	(PIN_INPUT_PULLDOWN | MUX_MODE7)
 +		>;
 +	};
 +
-+	/* Qspi, MYiR */
-+	qspi1_default: qspi1_default {
++	debugss_pins: pinmux_debugss_pins {
 +		pinctrl-single,pins = <
-+			0x7c (PIN_INPUT_PULLUP | MUX_MODE3)
-+			0x88 (PIN_INPUT_PULLUP | MUX_MODE2)
-+			0x90 (PIN_INPUT_PULLUP | MUX_MODE3)
-+			0x94 (PIN_INPUT_PULLUP | MUX_MODE3)
-+			0x98 (PIN_INPUT_PULLUP | MUX_MODE3)
-+			0x9c (PIN_INPUT_PULLUP | MUX_MODE3)
++			0x290 (PIN_INPUT_PULLDOWN)
++			0x294 (PIN_INPUT_PULLDOWN)
++			0x298 (PIN_INPUT_PULLDOWN)
++			0x29C (PIN_INPUT_PULLDOWN)
++			0x2A0 (PIN_INPUT_PULLDOWN)
++			0x2A8 (PIN_INPUT_PULLDOWN)
 +		>;
 +	};
 +
@@ -586,9 +738,9 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +};
 +
 +&i2c0 {
-+        status = "okay";
-+        pinctrl-names = "default";
-+        pinctrl-0 = <&i2c0_pins>;
++	status = "okay";
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c0_pins &eeprom_wp_pin>;
 +	clock-frequency = <100000>;
 +
 +	/* Set OPP50 (0.95V) for VDD MPU and core */
@@ -611,13 +763,11 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		reg = <0x24>;
 +		compatible = "ti,tps65218";
 +		interrupts = <GIC_SPI 7 IRQ_TYPE_NONE>; /* NMIn */
-+		interrupt-parent = <&gic>;
 +		interrupt-controller;
 +		#interrupt-cells = <2>;
 +
 +		dcdc1: regulator-dcdc1 {
 +			compatible = "ti,tps65218-dcdc1";
-+			/* VDD_CORE voltage limits min of OPP50 and max of OPP100 */
 +			regulator-name = "vdd_core";
 +			regulator-min-microvolt = <912000>;
 +			regulator-max-microvolt = <1144000>;
@@ -627,7 +777,6 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +
 +		dcdc2: regulator-dcdc2 {
 +			compatible = "ti,tps65218-dcdc2";
-+			/* VDD_MPU voltage limits min of OPP50 and max of OPP_NITRO */
 +			regulator-name = "vdd_mpu";
 +			regulator-min-microvolt = <912000>;
 +			regulator-max-microvolt = <1378000>;
@@ -637,6 +786,17 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +
 +		dcdc3: regulator-dcdc3 {
 +			compatible = "ti,tps65218-dcdc3";
++			regulator-name = "vdcdc3";
++			regulator-min-microvolt = <1500000>;
++			regulator-max-microvolt = <1500000>;
++			regulator-boot-on;
++			regulator-always-on;
++			regulator-state-mem {
++				regulator-on-in-suspend;
++			};
++			regulator-state-disk {
++				regulator-off-in-suspend;
++			};
 +		};
 +
 +		ldo1: regulator-ldo1 {
@@ -651,27 +811,126 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		ls2: regulator-ls2 {
 +			compatible = "ti,tps65218-ls2";
 +			regulator-name = "vdd_vbus0";
-+			regulator-min-microamp = <100000>;
-+			regulator-max-microamp = <1000000>;
-+			regulator-input-current-limit-microamp = <500000>;
++			#regulator-min-microamp = <100000>;
++			#regulator-max-microamp = <1000000>;
++			#regulator-input-current-limit-microamp = <500000>;
 +		};
 +		ls3: regulator-ls3 {
 +			compatible = "ti,tps65218-ls3";
 +			regulator-name = "vdd_vbus1";
-+			regulator-min-microamp = <100000>;
-+			regulator-max-microamp = <1000000>;
-+			regulator-input-current-limit-microamp = <500000>;
++			#regulator-min-microamp = <100000>;
++			#regulator-max-microamp = <1000000>;
++			#regulator-input-current-limit-microamp = <500000>;
 +			regulator-boot-on;
++		};
++	};
++
++	ov2659@30 {
++		compatible = "ovti,ov2659";
++		reg = <0x30>;
++
++		port {
++			ov2659_1: endpoint {
++				remote-endpoint = <&vpfe0_ep>;
++				mclk-frequency = <12000000>;
++			};
 +		};
 +	};
 +};
 +
-+&rtc {
++&i2c1 {
++	status = "okay";
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&i2c1_pins_default>;
++	pinctrl-1 = <&i2c1_pins_sleep>;
++
++	ov2659@30 {
++		compatible = "ovti,ov2659";
++		reg = <0x30>;
++
++		port {
++			ov2659_0: endpoint {
++				remote-endpoint = <&vpfe1_ep>;
++				mclk-frequency = <12000000>;
++			};
++		};
++	};
++
++	sii9022: sii9022@3b {
++		#sound-dai-cells = <0>;
++		compatible = "sil,sii9022";
++		reg = <0x3b>;
++
++		interrupt-parent = <&gpio3>;
++		interrupts = <24 IRQ_TYPE_LEVEL_LOW>;
++
++		i2s-fifo-routing = <
++			(ENABLE_BIT|CONNECT_SD0)
++			0
++			0
++			0
++		>;
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			port@0 {
++				reg = <0>;
++
++				sii9022_in: endpoint {
++					remote-endpoint = <&dpi_out>;
++				};
++			};
++
++			port@1 {
++				reg = <1>;
++
++				sii9022_out: endpoint {
++					remote-endpoint = <&hdmi_connector_in>;
++				};
++			};
++		};
++	};
++};
++
++&epwmss0 {
 +	status = "okay";
 +};
 +
-+&gpio0 {
++&tscadc {
 +	status = "okay";
++
++	adc {
++		ti,adc-channels = <0 1 2 3 4 5 6 7>;
++	};
++};
++
++&ecap0 {
++	status = "okay";
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&ecap0_pins_default>;
++	pinctrl-1 = <&ecap0_pins_sleep>;
++};
++
++&gpio0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&gpio0_pins>;
++	status = "okay";
++
++	p23 {
++		gpio-hog;
++		gpios = <23 GPIO_ACTIVE_HIGH>;
++		/* SelEMMCorNAND selects between eMMC and NAND:
++		 * Low: NAND
++		 * High: eMMC
++		 * When changing this line make sure the newly
++		 * selected device node is enabled and the previously
++		 * selected device node is disabled.
++		 */
++		output-low;
++		line-name = "SelEMMCorNAND";
++	};
 +};
 +
 +/* Added by MYiR for GPIO1 & GPIO2 */
@@ -696,60 +955,42 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +	ti,no-reset;
 +};
 +
-+/* Enable qspi, 16MB S25FL128S norflash, MYiR */
-+&qspi {
++&mmc2 {
++        status = "okay";
++        vmmc-supply = <&vmmcsd_fixed>;
++        bus-width = <8>;
++        pinctrl-names = "default", "sleep";
++        pinctrl-0 = <&emmc_pins_default>;
++        pinctrl-1 = <&emmc_pins_sleep>;
++        ti,non-removable;
++};
++
++&mmc1 {
 +	status = "okay";
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&qspi1_default>;
-+	clocks = <&dpll_per_m2_div4_ck>;
-+	clock-names = "fck";
++	vmmc-supply = <&vmmcsd_fixed>;
++	bus-width = <4>;
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&mmc1_pins>;
++	pinctrl-1 = <&mmc1_sleep_pins>;
++	cd-gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
++};
 +
-+	qspi-gpio = <&gpio1 16 GPIO_ACTIVE_LOW>;
-+	spi-max-frequency = <24000000>;
-+	m25p80@0 {
-+		compatible = "s25fl128s";
-+		spi-max-frequency = <24000000>;
-+		reg = <0>;
-+		spi-cpol;
-+		spi-cpha;
-+		spi-tx-bus-width = <1>;
-+		spi-rx-bus-width = <4>;
-+		#address-cells = <1>;
-+		#size-cells = <1>;
++&usb2_phy1 {
++	status = "okay";
++};
 +
-+		/* MTD partition table.
-+		 * The ROM checks the first 512KiB
-+		 * for a valid file to boot(XIP).
-+		 */
-+		partition@0 {
-+			label = "QSPI.U_BOOT";
-+			reg = <0x00000000 0x000080000>;
-+		};
-+		partition@1 {
-+			label = "QSPI.U_BOOT.backup";
-+			reg = <0x00080000 0x00080000>;
-+		};
-+		partition@2 {
-+			label = "QSPI.U_BOOT_ENV";
-+			reg = <0x00100000 0x00020000>;
-+		};
-+		partition@3 {
-+			label = "QSPI.U-BOOT-ENV.backup";
-+			reg = <0x00120000 0x00020000>;
-+		};
-+		partition@4 {
-+			label = "QSPI.U-BOOT-DEVICETREE";
-+			reg = <0x00140000 0x00010000>;
-+		};
-+		partition@5 {
-+			label = "QSPI.KERNEL";
-+			reg = <0x00150000 0x0500000>;
-+		};
-+		partition@6 {
-+			label = "QSPI.FILESYSTEM";
-+			reg = <0x00650000 0x9B0000>;
-+		};
-+	};
++&usb1 {
++	dr_mode = "otg";
++	status = "okay";
++};
++
++&usb2_phy2 {
++	status = "okay";
++};
++
++&usb2 {
++	dr_mode = "host";
++	status = "okay";
 +};
 +
 +&mac {
@@ -772,195 +1013,29 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +	phy-mode = "rgmii";
 +};
 +
-+&mmc2 {
-+	vmmc-supply = <&vmmcsd_fixed>;
-+	bus-width = <8>;
-+	ti,non-removable;
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&emmc_pins>;
-+	status = "okay";
-+};
-+
-+&mmc1 {
-+	status = "okay";
-+	vmmc-supply = <&vmmcsd_fixed>;
-+	bus-width = <4>;
-+	pinctrl-names = "default", "sleep";
-+	pinctrl-0 = <&mmc1_pins>;
-+	pinctrl-1 = <&mmc1_sleep_pins>;
-+	cd-gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
-+};
-+
-+&i2c0 {
-+		status = "okay";
-+      	pinctrl-names = "default";
-+        pinctrl-0 = <&i2c0_pins &eeprom_wp_pin>;
-+
-+        ov2659@30 {
-+		compatible = "ti,ov2659";
-+		reg = <0x30>;
-+
-+		port {
-+			ov2659_1: endpoint {
-+				remote-endpoint = <&vpfe0_ep>;
-+				mclk-frequency = <12000000>;
-+			};
-+		};
-+	};
-+
-+	cat24c256@50 {
-+		compatible = "24c256";
-+		reg = <0x50>;
-+
-+		pagesize = <64>;
-+	};
-+};
-+
-+&i2c1 {
-+        status = "okay";
-+        pinctrl-names = "default";
-+        pinctrl-0 = <&i2c1_pins>;
-+
-+
-+	sii9022: sii9022@3b {
-+		compatible = "sii,sii9022";
-+		reg = <0x3b>;
-+		reset-gpio = <&gpio5 8 GPIO_ACTIVE_LOW>;
-+
-+		ports {
-+			#address-cells = <1>;
-+			#size-cells = <0>;
-+
-+			port@0 {
-+				reg = <0>;
-+
-+				sii9022_in: endpoint {
-+					remote-endpoint = <&dpi_out>;
-+				};
-+			};
-+
-+			port@1 {
-+				reg = <1>;
-+
-+				sii9022_out: endpoint {
-+					remote-endpoint = <&hdmi_connector_in>;
-+				};
-+			};
-+		};
-+	};
-+
-+	/* Touch IC device, MYiR - not on the board right? */
-+/*
-+	ft0x5x_ts@38 {
-+		compatible = "ft5x06_ts";
-+		pinctrl-name = "default";
-+		pinctrl-0 = <&pixcir_ts_pins>;
-+		reg = <0x38>;
-+		interrupt-parent = <&gpio3>;
-+		interrupts = <22 0>;
-+
-+		polling_mode = <0>;
-+	    multi_touch = <0>;
-+   	    attb-gpio = <&gpio3 22 GPIO_ACTIVE_HIGH>;
-+	};
-+*/
-+
-+	tlv320aic3106: tlv320aic3106@1b {
-+		compatible = "ti,tlv320aic3106";
-+		reg = <0x1b>;
-+		status = "okay";
-+
-+		/* Regulators */
-+		AVDD-supply = <&evm_v3p3>;
-+		IOVDD-supply = <&evm_v3p3>;
-+		DRVDD-supply = <&evm_v3p3>;
-+		DVDD-supply = <&ldo1>;
-+	};
-+
-+	ov2659@30 {
-+		compatible = "ti,ov2659";
-+		reg = <0x30>;
-+
-+		port {
-+			ov2659_0: endpoint {
-+				remote-endpoint = <&vpfe1_ep>;
-+				mclk-frequency = <12000000>;
-+			};
-+		};
-+	};
-+};
-+
-+&dss {
-+        pinctrl-names = "default", "sleep";
-+        pinctrl-0 = <&dss_pinctrl_default>;
-+        pinctrl-1 = <&dss_pinctrl_sleep>;
-+
-+	port {
-+		dpi_out: endpoint@0 {
-+			remote-endpoint = <&sii9022_in>;
-+			data-lines = <24>;
-+		};
-+	};
-+};
-+
-+&tscadc {
-+	status = "okay";
-+
-+	adc {
-+		ti,adc-channels = <0 1 2 3 4 5 6 7>;
-+	};
-+};
-+
-+&ecap0 {
-+	status = "okay";
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&ecap0_pins>;
-+};
-+
-+&epwmss0 {
-+	status = "okay";
-+};
-+
-+&dcan0 {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&dcan0_default>;
-+	status = "okay";
-+};
-+
-+&dcan1 {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&dcan1_default>;
-+	status = "okay";
-+};
-+
-+&mcasp1 {
-+	pinctrl-names = "default", "sleep";
-+	pinctrl-0 = <&mcasp1_pins>;
-+	pinctrl-1 = <&mcasp1_sleep_pins>;
-+
-+	status = "okay";
-+
-+	op-mode = <0>; /* MCASP_IIS_MODE */
-+	tdm-slots = <2>;
-+	/* 4 serializers */
-+	serial-dir = <  /* 0: INACTIVE, 1: TX, 2: RX */
-+		0 0 1 2
-+	>;
-+	tx-num-evt = <32>;
-+	rx-num-evt = <32>;
-+};
-+
 +&elm {
 +	status = "okay";
 +};
 +
 +&gpmc {
++	/*
++	 * When enabling GPMC, disable eMMC and set
++	 * SelEMMCorNAND to output-low
++	 */
 +	status = "disabled";
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&nand_flash_x8>;
-+	ranges = <0 0 0x08000000 0x10000000>;	/* CS0: NAND */
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&nand_flash_x8_default>;
++	pinctrl-1 = <&nand_flash_x8_sleep>;
++	ranges = <0 0 0x08000000 0x01000000>;	/* CS0 space. Min partition = 16MB */
 +	nand@0,0 {
-+		reg = <0 0 0>; /* CS0, offset 0 */
++		compatible = "ti,omap2-nand";
++		reg = <0 0 4>;		/* device IO registers */
++		interrupt-parent = <&gpmc>;
++		interrupts = <0 IRQ_TYPE_NONE>, /* fifoevent */
++			     <1 IRQ_TYPE_NONE>;	/* termcount */
++		rb-gpios = <&gpmc 0 GPIO_ACTIVE_HIGH>;	/* gpmc_wait0 */
++		ti,nand-ecc-opt = "bch16";
++		ti,elm-id = <&elm>;
 +		nand-bus-width = <8>;
 +		gpmc,device-width = <1>;
 +		gpmc,sync-clk-ps = <0>;
@@ -977,16 +1052,11 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		gpmc,access-ns = <30>;
 +		gpmc,rd-cycle-ns = <40>;
 +		gpmc,wr-cycle-ns = <40>;
-+		gpmc,wait-on-read = "true";
-+		gpmc,wait-on-write = "true";
 +		gpmc,bus-turnaround-ns = <0>;
 +		gpmc,cycle2cycle-delay-ns = <0>;
 +		gpmc,clk-activation-ns = <0>;
-+		gpmc,wait-monitoring-ns = <0>;
 +		gpmc,wr-access-ns = <40>;
 +		gpmc,wr-data-mux-bus-ns = <0>;
-+		ti,nand-ecc-opt = "bch16";
-+		ti,elm-id = <&elm>;
 +		/* MTD partition table */
 +		/* All SPL-* partitions are sized to minimal length
 +		 * which can be independently programmable. For
@@ -1007,7 +1077,7 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		};
 +		partition@3 {
 +			label = "NAND.SPL.backup3";
-+			reg = <0x000C0000 0x00040000>;
++			reg = <0x000c0000 0x00040000>;
 +		};
 +		partition@4 {
 +			label = "NAND.u-boot-spl-os";
@@ -1023,7 +1093,7 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		};
 +		partition@7 {
 +			label = "NAND.u-boot-env.backup1";
-+			reg = <0x002C0000 0x00040000>;
++			reg = <0x002c0000 0x00040000>;
 +		};
 +		partition@8 {
 +			label = "NAND.kernel";
@@ -1031,33 +1101,45 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +		};
 +		partition@9 {
 +			label = "NAND.file-system";
-+			reg = <0x00A00000 0x0F600000>;
++			reg = <0x00a00000 0x1f600000>;
 +		};
 +	};
 +};
 +
 +&uart0 {
 +	status = "okay";
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&uart0_pins>;
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&uart0_pins_default>;
++	pinctrl-1 = <&uart0_pins_sleep>;
 +};
 +
-+&vpfe1 {
-+	status = "okay";
-+	pinctrl-names = "default", "sleep";
-+	pinctrl-0 = <&vpfe1_pins_default>;
-+	pinctrl-1 = <&vpfe1_pins_sleep>;
++&dss {
++	status = "ok";
 +
-+	/* Camera port */
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&dss_pinctrl_default>;
++	pinctrl-1 = <&dss_pinctrl_sleep>;
++
 +	port {
-+		vpfe1_ep: endpoint {
-+			remote-endpoint = <&ov2659_0>;
-+			if_type = <2>;
-+			bus_width = <8>;
-+			hdpol = <0>;
-+			vdpol = <0>;
++		dpi_out: endpoint@0 {
++			remote-endpoint = <&sii9022_in>;
++			data-lines = <24>;
 +		};
 +	};
++};
++
++&dcan0 {
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&dcan0_default>;
++	pinctrl-1 = <&dcan0_sleep>;
++	status = "okay";
++};
++
++&dcan1 {
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&dcan1_default>;
++	pinctrl-1 = <&dcan1_sleep>;
++	status = "okay";
 +};
 +
 +&vpfe0 {
@@ -1066,16 +1148,50 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +	pinctrl-0 = <&vpfe0_pins_default>;
 +	pinctrl-1 = <&vpfe0_pins_sleep>;
 +
-+	/* Camera port */
 +	port {
 +		vpfe0_ep: endpoint {
 +			remote-endpoint = <&ov2659_1>;
-+			if_type = <2>;
-+			bus_width = <8>;
-+			hdpol = <0>;
-+			vdpol = <0>;
++			ti,am437x-vpfe-interface = <0>;
++			bus-width = <8>;
++			hsync-active = <0>;
++			vsync-active = <0>;
 +		};
 +	};
++};
++
++&vpfe1 {
++	status = "okay";
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&vpfe1_pins_default>;
++	pinctrl-1 = <&vpfe1_pins_sleep>;
++
++	port {
++		vpfe1_ep: endpoint {
++			remote-endpoint = <&ov2659_0>;
++			ti,am437x-vpfe-interface = <0>;
++			bus-width = <8>;
++			hsync-active = <0>;
++			vsync-active = <0>;
++		};
++	};
++};
++
++&mcasp1 {
++	#sound-dai-cells = <0>;
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&mcasp1_pins>;
++	pinctrl-1 = <&mcasp1_sleep_pins>;
++
++	status = "okay";
++
++	op-mode = <0>; /* MCASP_IIS_MODE */
++	tdm-slots = <2>;
++	/* 4 serializers */
++	serial-dir = <  /* 0: INACTIVE, 1: TX, 2: RX */
++		0 0 1 2
++	>;
++	tx-num-evt = <32>;
++	rx-num-evt = <32>;
 +};
 +
 +&rtc {
@@ -1085,6 +1201,15 @@ Index: ti-linux-kernel-ti-linux-kernel/arch/arm/boot/dts/am437x-myir-ricoboard.d
 +	status = "okay";
 +};
 +
-+&wkup_m3 {
++&wkup_m3_ipc {
 +	ti,set-io-isolation;
++	ti,scale-data-fw = "am43x-evm-scale-data.bin";
++};
++
++&sgx {
++	status = "okay";
++};
++
++&cpu {
++	cpu0-supply = <&dcdc2>;
 +};
